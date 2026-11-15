@@ -17,6 +17,7 @@ private enum EvalTrigger: String {
     case hotkey
     case overrides
     case wake
+    case accessibility = "accessibility"
 }
 
 enum Overrule: String {
@@ -112,6 +113,8 @@ final class SmartController: NSObject {
     var overrule: Overrule = .auto
 
     private var lastSnapshot: Snapshot?
+    private var accessibilityTimer: Timer?
+    private let accessibilityFullScreen = AccessibilityFullScreenProvider()
 
     // MARK: - Watchers
 
@@ -152,6 +155,13 @@ final class SmartController: NSObject {
             object: nil,
         )
         try dockSpaceWatcher.start()
+        // Poll only while the controller is running. This also covers windows
+        // on secondary displays and fullscreen changes within the same app.
+        accessibilityTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.evaluate(trigger: .accessibility)
+            }
+        }
         HotkeyState.write(hotkeyWatcher.start() ? "registered" : "failed")
         evaluate(trigger: .start)
     }
@@ -159,6 +169,8 @@ final class SmartController: NSObject {
     /// Called from the daemon's signal handler so the watcher's
     /// termination handler doesn't `die` on graceful shutdown.
     func stop() {
+        accessibilityTimer?.invalidate()
+        accessibilityTimer = nil
         dockSpaceWatcher.stop()
         hotkeyWatcher.stop()
         HotkeyState.clear()
@@ -284,6 +296,13 @@ final class SmartController: NSObject {
     /// bypasses the snapshot dedup to re-assert the pref even when
     /// nothing changed (used on wake).
     private func evaluate(trigger: EvalTrigger, force: Bool = false) {
+        if accessibilityTimer != nil,
+           let state = accessibilityFullScreen.state(for: frontmostProvider.frontmostApp?.pid) {
+            if dockFs.isFullScreen, !state.isFullScreen {
+                onDesktopArrival()
+            }
+            dockFs = state
+        }
         let snap = takeSnapshot()
 
         if !force, let last = lastSnapshot, snap == last {
