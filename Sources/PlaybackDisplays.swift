@@ -1,10 +1,38 @@
 import AppKit
 
-enum DisplayScope: String, CaseIterable {
-    case all, external
+enum DisplayScope: RawRepresentable, Equatable {
+    case all, external, display(UUID)
+
+    init?(rawValue: String) {
+        switch rawValue {
+        case "all": self = .all
+        case "external": self = .external
+        default:
+            guard let id = UUID(uuidString: rawValue) else { return nil }
+            self = .display(id)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .all: "all"
+        case .external: "external"
+        case let .display(uuid): uuid.uuidString
+        }
+    }
+
+    static func uuid(of display: CGDirectDisplayID) -> UUID? {
+        guard let uuid = CGDisplayCreateUUIDFromDisplayID(display)?.takeRetainedValue() else { return nil }
+        return UUID(uuidString: CFUUIDCreateString(nil, uuid) as String)
+    }
+
+    func matches(_ display: CGDirectDisplayID) -> Bool {
+        guard case let .display(uuid) = self else { return true }
+        return Self.uuid(of: display) == uuid
+    }
 }
 
-enum OtherScreenShade: String, CaseIterable {
+enum OtherScreenShade: String {
     case off, dim, black
 }
 
@@ -28,7 +56,7 @@ struct DisplaySettings: Equatable {
 }
 
 extension NSScreen {
-    fileprivate var displayID: CGDirectDisplayID? {
+    var displayID: CGDirectDisplayID? {
         (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
     }
 }
@@ -102,7 +130,16 @@ final class PlaybackDisplays {
         return nil
     }
 
+    static func listExternalDisplays() {
+        for screen in NSScreen.screens {
+            guard let id = screen.displayID, CGDisplayIsBuiltin(id) == 0,
+                  let uuid = DisplayScope.uuid(of: id) else { continue }
+            print("\(uuid.uuidString)  \(screen.localizedName)")
+        }
+    }
+
     func clear() {
+        BuiltInBacklight.shared.restore()
         for panel in panels.values { panel.orderOut(nil) }
         panels.removeAll()
     }
@@ -118,9 +155,14 @@ final class PlaybackDisplays {
             clear()
             return
         }
+        if shade != .dim { BuiltInBacklight.shared.restore() }
         var active = Set<CGDirectDisplayID>()
         for screen in screens {
             guard let id = screen.displayID, id != playbackDisplay else { continue }
+            if shade == .dim, CGDisplayIsBuiltin(id) != 0 {
+                BuiltInBacklight.shared.dim(id)
+                continue
+            }
             active.insert(id)
             let panel: NSPanel
             if let existing = panels[id] {

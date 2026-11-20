@@ -246,7 +246,7 @@ final class SmartController: NSObject {
     func updateDisplaySettings(_ settings: DisplaySettings) {
         guard settings != displaySettings else { return }
         displaySettings = settings
-        evaluate(trigger: .displays)
+        evaluate(trigger: .displays, force: true)
     }
 
     func updateOverrides(_ overrides: AppOverrides) {
@@ -339,7 +339,8 @@ final class SmartController: NSObject {
         if accessibilityTimer != nil, lastSnapshot?.dockFs.isFullScreen == true, !fullscreen.isFullScreen {
             onDesktopArrival()
         }
-        if displaySettings.scope == .external, externalDisplay == nil { overrule = .auto }
+        if let display = externalDisplay, !displaySettings.scope.matches(display) { externalDisplay = nil }
+        if displaySettings.scope != .all, externalDisplay == nil { overrule = .auto }
         let snap = takeSnapshot(fullscreen: fullscreen)
         playbackDisplays.update(shade: displaySettings.shade,
                                 playbackDisplay: externalDisplay != nil && snap.decision.shouldHide ? externalDisplay : nil)
@@ -352,9 +353,11 @@ final class SmartController: NSObject {
         }
         lastSnapshot = snap
 
+        let scoped = displaySettings.scope != .all
         menuBar.apply(
-            shouldHide: snap.effectiveShouldHide,
+            shouldHide: snap.effectiveShouldHide && (!scoped || snap.decision.shouldHide),
             isFullScreen: snap.dockFs.isFullScreen,
+            target: scoped ? .player(snap.appKitFrontBundle) : .system,
         )
         logSnapshot(snap, trigger: trigger)
     }

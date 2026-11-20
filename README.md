@@ -104,6 +104,8 @@ Running the binary directly (`./houdini`) is useful for debugging; `brew service
 In smart mode, use these settings independently. Run either command without a value to see the current setting.
 
 ```bash
+houdini displays list       # List external screens and their stable identifiers
+houdini displays "$tv_uuid" # Use the UUID printed for your TV
 houdini displays external   # Hide the menu bar only for fullscreen playback on an external display
 houdini displays all        # Allow automatic hiding on any display (default)
 houdini shade dim           # Dim the other displays during external fullscreen playback
@@ -113,7 +115,9 @@ houdini shade off           # Disable shading (default)
 
 Houdini uses Accessibility to locate the focused fullscreen window. When that lookup cannot identify an external display, it also checks whether the active app owns a visible fullscreen window registered by macOS Spaces. The external-display options apply to an extended desktop. An unidentified or mirrored playback display does not trigger them. The focused window is used to locate the player; Now Playing identifies the application, not an individual browser tab or player window.
 
-Shading follows playback independently of the menu-bar hotkey. It clears when playback pauses, the player loses focus or leaves fullscreen, or the playback display disconnects. The overlays pass clicks through and preserve screen brightness and power settings. Fixed mode remains hotkey-only.
+With an external display scope, Houdini asks the active player to hide its native fullscreen menu bar and restores its previous preference on pause, focus loss or shutdown. The system-wide preference stays in effect for other apps. The preference is per application, so simultaneous fullscreen windows of the same application can share it.
+
+Shading follows playback independently of the menu-bar hotkey. It clears when playback pauses, the player loses focus or leaves fullscreen, or the playback display disconnects. On a MacBook, `dim` lowers the built-in backlight to a quarter of its starting level. Playback ending restores that level unless the user or automatic brightness has adjusted it. This uses the optional DisplayServices API. Other displays and the `black` setting use click-through overlays. Fixed mode remains hotkey-only.
 
 ## Deny list
 

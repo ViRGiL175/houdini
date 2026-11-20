@@ -22,11 +22,12 @@ func runForeground() {
     )
 
     acquireInstanceLock()
-
-    let menuBar = MenuBarToggler()
-    menuBar.resetToVisible()
+    BuiltInBacklight.shared.recover()
 
     let mode = ModeState.read()
+    let menuBar = MenuBarToggler(playerMode: mode == .smart && DisplaySettings.read().scope != .all)
+    menuBar.resetToVisible()
+
     Log.general
         .notice(
             "houdini \(version, privacy: .public) running (mode=\(mode.rawValue, privacy: .public))",
@@ -303,7 +304,7 @@ func runMode(args: [String]) -> Never {
 }
 
 @MainActor
-func runDisplaySetting<Value: RawRepresentable & CaseIterable>(_ key: String, args: [String], default fallback: Value) -> Never
+func runDisplaySetting<Value: RawRepresentable>(_ key: String, args: [String], default fallback: Value, choices: String) -> Never
     where Value.RawValue == String
 {
     if args.isEmpty {
@@ -311,7 +312,7 @@ func runDisplaySetting<Value: RawRepresentable & CaseIterable>(_ key: String, ar
         exit(0)
     }
     guard args.count == 1, let value = Value(rawValue: args[0]) else {
-        die("usage: houdini \(key) [\(Value.allCases.map(\.rawValue).joined(separator: "|"))]")
+        die("usage: houdini \(key) [\(choices)]")
     }
     guard let url = subsystemSupportURL(key) else { die("cannot locate Application Support") }
     do {
@@ -501,7 +502,8 @@ func usage() {
       houdini mode smart|fixed  Set the mode. Default is `smart`. The
                                 running daemon (if any) is signaled to
                                 reload.
-      houdini displays [all|external]  Smart mode menu-bar scope (default: all).
+      houdini displays [all|external|UUID]  Smart mode menu-bar scope (default: all).
+      houdini displays list                 List external display UUIDs and names.
       houdini shade [off|dim|black]    Shade other screens during external fullscreen
                                       playback (default: off).
       houdini deny              List bundle IDs that won't trigger
