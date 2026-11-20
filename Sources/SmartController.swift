@@ -303,11 +303,11 @@ final class SmartController: NSObject {
 
     /// Refused on Desktop — pref is FS-only.
     func toggleOverrule() {
-        guard dockFs.isFullScreen else {
+        let snap = lastSnapshot ?? takeSnapshot()
+        guard snap.dockFs.isFullScreen else {
             Log.controller.info("→ hotkey ignored (not in fullscreen)")
             return
         }
-        let snap = takeSnapshot()
         guard snap.allowDisplay else { return }
         overrule = snap.effectiveShouldHide ? .forceShow : .forceHide
         evaluate(trigger: .hotkey)
@@ -322,18 +322,25 @@ final class SmartController: NSObject {
     /// nothing changed (used on wake).
     private func evaluate(trigger: EvalTrigger, force: Bool = false) {
         externalDisplay = nil
+        let pid = frontmostProvider.frontmostApp?.pid
+        let displayOptionsEnabled = displaySettings != DisplaySettings()
         if accessibilityTimer != nil,
-           let window = accessibilityFullScreen.state(for: frontmostProvider.frontmostApp?.pid,
-                                                      locateDisplay: displaySettings != DisplaySettings()) {
+           let window = accessibilityFullScreen.state(for: pid, locateDisplay: displayOptionsEnabled) {
             externalDisplay = window.externalDisplay
-            let state = window.fullscreen
-            if dockFs.isFullScreen, !state.isFullScreen {
-                onDesktopArrival()
-            }
-            dockFs = state
+            dockFs = window.fullscreen
+        }
+
+        var fullscreen = dockFs
+        if accessibilityTimer != nil, displayOptionsEnabled, externalDisplay == nil, isPlaying, let pid,
+           let display = PlaybackDisplays.externalFullscreenWindow(of: pid) {
+            externalDisplay = display
+            fullscreen = DockFullScreenState(isFullScreen: true, fsOwnerPID: FSOwnerPID(pid))
+        }
+        if accessibilityTimer != nil, lastSnapshot?.dockFs.isFullScreen == true, !fullscreen.isFullScreen {
+            onDesktopArrival()
         }
         if displaySettings.scope == .external, externalDisplay == nil { overrule = .auto }
-        let snap = takeSnapshot()
+        let snap = takeSnapshot(fullscreen: fullscreen)
         playbackDisplays.update(shade: displaySettings.shade,
                                 playbackDisplay: externalDisplay != nil && snap.decision.shouldHide ? externalDisplay : nil)
 
@@ -353,7 +360,7 @@ final class SmartController: NSObject {
     }
 
     /// Pure function of `SmartController`'s cached state — never mutates.
-    private func takeSnapshot() -> Snapshot {
+    private func takeSnapshot(fullscreen: DockFullScreenState? = nil) -> Snapshot {
         let frontApp = frontmostProvider.frontmostApp
         let appKitFrontPID = frontApp.map { FrontmostPID($0.pid) }
         let appKitFrontName = frontApp?.name ?? "(unknown)"
@@ -363,7 +370,7 @@ final class SmartController: NSObject {
             appKitFrontPID: appKitFrontPID,
             appKitFrontName: appKitFrontName,
             appKitFrontBundle: appKitFrontBundle,
-            dockFs: dockFs,
+            dockFs: fullscreen ?? dockFs,
             isPlaying: isPlaying,
             nowPlayingPID: nowPlayingPID,
             nowPlayingBundle: nowPlayingBundle,

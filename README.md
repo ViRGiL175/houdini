@@ -111,7 +111,7 @@ houdini shade black         # Cover the other displays in black
 houdini shade off           # Disable shading (default)
 ```
 
-Grant Houdini Accessibility access in System Settings so it can locate the focused fullscreen window. The external-display options apply to an extended desktop. An unidentified or mirrored playback display does not trigger them. The focused window is used to locate the player; Now Playing identifies the application, not an individual browser tab or player window.
+Houdini uses Accessibility to locate the focused fullscreen window. When that lookup cannot identify an external display, it also checks whether the active app owns a visible fullscreen window registered by macOS Spaces. The external-display options apply to an extended desktop. An unidentified or mirrored playback display does not trigger them. The focused window is used to locate the player; Now Playing identifies the application, not an individual browser tab or player window.
 
 Shading follows playback independently of the menu-bar hotkey. It clears when playback pauses, the player loses focus or leaves fullscreen, or the playback display disconnects. The overlays pass clicks through and preserve screen brightness and power settings. Fixed mode remains hotkey-only.
 

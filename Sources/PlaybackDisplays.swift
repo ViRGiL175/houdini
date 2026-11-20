@@ -53,6 +53,55 @@ final class PlaybackDisplays {
         return nil
     }
 
+    /// Dock can miss the entry event when Houdini starts inside a fullscreen Space.
+    /// The Spaces preference is undocumented. Only accept a matching *visible*
+    /// window ID and owner; stale, incomplete or unfamiliar records are ignored.
+    static func externalFullscreenWindow(of pid: pid_t) -> CGDirectDisplayID? {
+        guard let configuration = CFPreferencesCopyAppValue(
+            "SpacesDisplayConfiguration" as CFString, "com.apple.spaces" as CFString
+        ) as? [String: Any],
+              let management = configuration["Management Data"] as? [String: Any],
+              let monitors = management["Monitors"] as? [[String: Any]]
+        else { return nil }
+
+        var fullscreenIDs = Set<CGWindowID>()
+        for monitor in monitors {
+            guard let spaces = monitor["Spaces"] as? [[String: Any]] else { continue }
+            for space in spaces where space["type"] as? Int == 4 && space["pid"] as? pid_t == pid {
+                if let id = space["fs_wid"] as? CGWindowID { fullscreenIDs.insert(id) }
+            }
+        }
+        guard !fullscreenIDs.isEmpty,
+              let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
+                                                       kCGNullWindowID) as? [[String: Any]]
+        else { return nil }
+
+        let screens = NSScreen.screens.compactMap(\.displayID).map { CGDisplayBounds($0) }
+        var precedingWindows: [CGRect] = []
+        for window in windows where window[kCGWindowOwnerPID as String] as? pid_t == pid
+            && window[kCGWindowLayer as String] as? Int == 0 {
+            guard let id = window[kCGWindowNumber as String] as? CGWindowID,
+                  let bounds = window[kCGWindowBounds as String] as? NSDictionary,
+                  let rect = CGRect(dictionaryRepresentation: bounds),
+                  screens.contains(where: { !$0.intersection(rect).isEmpty }),
+                  (window[kCGWindowAlpha as String] as? Double ?? 1) > 0
+            else { continue }
+            if fullscreenIDs.contains(id) {
+                let center = CGPoint(x: rect.midX, y: rect.midY)
+                guard let display = externalDisplay(containing: center) else { return nil }
+                // Chromium has separate toolbar windows above its fullscreen window.
+                // A foreground document on another screen makes the target ambiguous.
+                let displayBounds = CGDisplayBounds(display)
+                guard !precedingWindows.contains(where: { frame in
+                    frame.contains(center) || screens.contains { $0 != displayBounds && !$0.intersection(frame).isEmpty }
+                }) else { return nil }
+                return display
+            }
+            precedingWindows.append(rect)
+        }
+        return nil
+    }
+
     func clear() {
         for panel in panels.values { panel.orderOut(nil) }
         panels.removeAll()
