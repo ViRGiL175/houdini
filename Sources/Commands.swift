@@ -81,6 +81,7 @@ final class CurrentController {
     }
 
     func start() {
+        ops.updateDisplaySettings(DisplaySettings.read())
         ops.start()
         cachedOverrides = overridesReader()
         ops.updateOverrides(cachedOverrides)
@@ -99,10 +100,14 @@ final class CurrentController {
             menuBar.resetToVisible()
             mode = newMode
             ops = opsFactory(newMode, menuBar)
+            ops.updateDisplaySettings(DisplaySettings.read())
             ops.start()
             ops.updateOverrides(newOverrides)
             cachedOverrides = newOverrides
-        } else if newOverrides != cachedOverrides {
+            return
+        }
+        ops.updateDisplaySettings(DisplaySettings.read())
+        if newOverrides != cachedOverrides {
             let oldCount = cachedOverrides.deny.count
             let newCount = newOverrides.deny.count
             Log.general.notice(
@@ -131,6 +136,7 @@ struct ControllerOps {
     let start: @MainActor () -> Void
     let stop: @MainActor () -> Void
     let updateOverrides: @MainActor (AppOverrides) -> Void
+    var updateDisplaySettings: @MainActor (DisplaySettings) -> Void = { _ in }
 }
 
 @MainActor
@@ -172,6 +178,7 @@ private func makeSmartOps(menuBar: MenuBarToggling) -> ControllerOps {
             controller.stop()
         },
         updateOverrides: { controller.updateOverrides($0) },
+        updateDisplaySettings: { controller.updateDisplaySettings($0) },
     )
 }
 
@@ -244,6 +251,9 @@ func runStatus() -> Never {
         print("adapter:        n/a (fixed mode)")
         print("dock log:       n/a (fixed mode)")
     }
+    let displays = DisplaySettings.read()
+    print("displays:        \(displays.scope.rawValue)")
+    print("shade:           \(displays.shade.rawValue)")
     print("hotkey:         \(hotkeyState)")
     let denyCount = AppOverridesState.read().deny.count
     if denyCount > 0 {
@@ -288,6 +298,31 @@ func runMode(args: [String]) -> Never {
                 "daemon is running but couldn't be signaled; restart to apply: brew services restart houdini",
             )
         }
+    }
+    exit(0)
+}
+
+@MainActor
+func runDisplaySetting<Value: RawRepresentable & CaseIterable>(_ key: String, args: [String], default fallback: Value) -> Never
+    where Value.RawValue == String
+{
+    if args.isEmpty {
+        print(DisplaySettings.read(key, default: fallback).rawValue)
+        exit(0)
+    }
+    guard args.count == 1, let value = Value(rawValue: args[0]) else {
+        die("usage: houdini \(key) [\(Value.allCases.map(\.rawValue).joined(separator: "|"))]")
+    }
+    guard let url = subsystemSupportURL(key) else { die("cannot locate Application Support") }
+    do {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try value.rawValue.write(to: url, atomically: true, encoding: .utf8)
+    } catch {
+        die("could not write \(key): \(error)")
+    }
+    print("\(key) set to \(value.rawValue)")
+    if probeDaemonRunning(), !signalDaemonReload() {
+        die("setting saved; restart houdini to apply")
     }
     exit(0)
 }
@@ -466,6 +501,9 @@ func usage() {
       houdini mode smart|fixed  Set the mode. Default is `smart`. The
                                 running daemon (if any) is signaled to
                                 reload.
+      houdini displays [all|external]  Smart mode menu-bar scope (default: all).
+      houdini shade [off|dim|black]    Shade other screens during external fullscreen
+                                      playback (default: off).
       houdini deny              List bundle IDs that won't trigger
                                 auto-hide even when all gates would
                                 otherwise pass.

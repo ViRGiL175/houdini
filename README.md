@@ -99,6 +99,22 @@ houdini deny remove <bundle>      # remove a bundle from the deny list
 
 Running the binary directly (`./houdini`) is useful for debugging; `brew services` is the normal path.
 
+## External displays
+
+In smart mode, use these settings independently. Run either command without a value to see the current setting.
+
+```bash
+houdini displays external   # Hide the menu bar only for fullscreen playback on an external display
+houdini displays all        # Allow automatic hiding on any display (default)
+houdini shade dim           # Dim the other displays during external fullscreen playback
+houdini shade black         # Cover the other displays in black
+houdini shade off           # Disable shading (default)
+```
+
+Grant Houdini Accessibility access in System Settings so it can locate the focused fullscreen window. The external-display options apply to an extended desktop. An unidentified or mirrored playback display does not trigger them. The focused window is used to locate the player; Now Playing identifies the application, not an individual browser tab or player window.
+
+Shading follows playback independently of the menu-bar hotkey. It clears when playback pauses, the player loses focus or leaves fullscreen, or the playback display disconnects. The overlays pass clicks through and preserve screen brightness and power settings. Fixed mode remains hotkey-only.
+
 ## Deny list
 
 Some apps drive Now Playing but you'd rather keep the menu bar visible while they're fullscreen — Spotify, Apple Music, etc. Add their bundle IDs to the deny list and they'll be excluded from auto-hide even when all gates would otherwise pass.

@@ -20,6 +20,10 @@ MainActor.assumeIsolated {
         runLogs(args: Array(args.dropFirst()))
     case "mode":
         runMode(args: Array(args.dropFirst()))
+    case "displays":
+        runDisplaySetting(cmd, args: Array(args.dropFirst()), default: DisplayScope.all)
+    case "shade":
+        runDisplaySetting(cmd, args: Array(args.dropFirst()), default: OtherScreenShade.off)
     case "deny":
         runDeny(args: Array(args.dropFirst()))
     case "status":
