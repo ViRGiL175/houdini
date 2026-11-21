@@ -13,10 +13,20 @@ final class BuiltInBacklight {
     private let write: Write?
     private let url = subsystemSupportURL("backlight-restore.json")
 
-    private struct Change: Codable {
+    struct Change: Codable {
         let screen: UUID
         let previous: Float
         let dimmed: Float
+
+        func restore(read: () -> Float?, write: (Float) -> Bool) -> Bool {
+            // Auto-brightness may drift during playback. Only the saved pre-playback
+            // level tells us that it is safe to discard the recovery record.
+            let tolerance: Float = 0.001
+            guard let current = read() else { return false }
+            if abs(current - previous) <= tolerance { return true }
+            guard write(previous), let restored = read() else { return false }
+            return abs(restored - previous) <= tolerance
+        }
     }
 
     private var change: Change?
@@ -66,9 +76,8 @@ final class BuiltInBacklight {
         guard let change, let url, let write else { return }
         for screen in NSScreen.screens {
             guard let display = screen.displayID, CGDisplayIsBuiltin(display) != 0,
-                  DisplayScope.uuid(of: display) == change.screen, let current = level(on: display) else { continue }
-            // Leave the latest setting alone if the user or auto-brightness changed it.
-            if abs(current - change.dimmed) < 0.01, write(display, change.previous) != 0 { return }
+                  DisplayScope.uuid(of: display) == change.screen else { continue }
+            guard change.restore(read: { self.level(on: display) }, write: { write(display, $0) == 0 }) else { return }
             do {
                 try FileManager.default.removeItem(at: url)
                 self.change = nil

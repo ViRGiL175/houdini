@@ -117,7 +117,7 @@ Houdini uses Accessibility to locate the focused fullscreen window. When that lo
 
 With an external display scope, Houdini asks the active player to hide its native fullscreen menu bar and restores its previous preference on pause, focus loss or shutdown. The system-wide preference stays in effect for other apps. The preference is per application, so simultaneous fullscreen windows of the same application can share it.
 
-Shading follows playback independently of the menu-bar hotkey. It clears when playback pauses, the player loses focus or leaves fullscreen, or the playback display disconnects. On a MacBook, `dim` lowers the built-in backlight to a quarter of its starting level. Playback ending restores that level unless the user or automatic brightness has adjusted it. This uses the optional DisplayServices API. Other displays and the `black` setting use click-through overlays. Fixed mode remains hotkey-only.
+Shading follows playback independently of the menu-bar hotkey. It clears when playback pauses, the player loses focus or leaves fullscreen, or the playback display disconnects. On a MacBook, `dim` lowers the built-in backlight to a quarter of its starting level. When playback ends, Houdini restores the saved starting level, including after manual or automatic adjustments during playback. It keeps the recovery record until the display reports that level. This uses the optional DisplayServices API. Other displays and the `black` setting use click-through overlays. Fixed mode remains hotkey-only.
 
 ## Deny list
 
