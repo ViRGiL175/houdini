@@ -30,7 +30,7 @@ final class FixedController {
         isHidden.toggle()
         // Fixed mode has no fullscreen signal; pass isFullScreen: true so
         // apply()'s FS guard always lets the write through.
-        menuBar.apply(shouldHide: isHidden, isFullScreen: true)
+        menuBar.apply(shouldHide: isHidden, isFullScreen: true, target: .system)
         let verb = isHidden ? "hide" : "show"
         Log.controller.info("→ \(verb, privacy: .public)  trig=hotkey mode=fixed")
     }

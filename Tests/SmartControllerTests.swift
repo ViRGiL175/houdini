@@ -13,7 +13,7 @@ private final class RecordingMenuBar: MenuBarToggling {
 
     var calls: [Call] = []
 
-    func apply(shouldHide: Bool, isFullScreen: Bool) {
+    func apply(shouldHide: Bool, isFullScreen: Bool, target _: MenuBarTarget) {
         calls.append(.apply(shouldHide: shouldHide, isFullScreen: isFullScreen))
     }
 

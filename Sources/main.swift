@@ -20,6 +20,24 @@ MainActor.assumeIsolated {
         runLogs(args: Array(args.dropFirst()))
     case "mode":
         runMode(args: Array(args.dropFirst()))
+    case "displays":
+        if args == ["displays", "list"] {
+            PlaybackDisplays.listExternalDisplays()
+            exit(0)
+        }
+        runDisplaySetting(
+            cmd,
+            args: Array(args.dropFirst()),
+            default: DisplayScope.all,
+            choices: "all|external|UUID",
+        )
+    case "shade":
+        runDisplaySetting(
+            cmd,
+            args: Array(args.dropFirst()),
+            default: OtherScreenShade.off,
+            choices: "off|dim|black",
+        )
     case "deny":
         runDeny(args: Array(args.dropFirst()))
     case "status":

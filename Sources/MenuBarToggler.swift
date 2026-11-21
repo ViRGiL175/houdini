@@ -1,59 +1,132 @@
-// Writes the "auto-hide menu bar in fullscreen" pref. Callers pass
-// `shouldHide`; the pref stores the inverted `visible` polarity.
-//
-// Writing alone doesn't re-apply policy to an already-fullscreen
-// window — the distributed notification is what tells SkyLight
-// (WindowServer) to re-read. ControlCenterSettings.appex does the
-// same after toggling the pref from System Settings.
-
 import Foundation
+
+enum MenuBarTarget {
+    case system
+    case player(String?)
+}
 
 @MainActor
 protocol MenuBarToggling: AnyObject {
-    func apply(shouldHide: Bool, isFullScreen: Bool)
+    func apply(shouldHide: Bool, isFullScreen: Bool, target: MenuBarTarget)
     func resetToVisible()
 }
 
 @MainActor
 final class MenuBarToggler: MenuBarToggling {
     private static let key = "AppleMenuBarVisibleInFullscreen" as CFString
-    private static let domain = kCFPreferencesAnyApplication
     private static let user = kCFPreferencesCurrentUser
     private static let host = kCFPreferencesAnyHost
+    private let recoveryURL = subsystemSupportURL("player-menu-restore.plist")
+    private var playerMode: Bool
+    private var activePlayer: String?
 
-    private static let changeNotification =
-        Notification.Name("AppleInterfaceFullScreenMenuBarVisibilityChangedNotification")
-
-    func apply(shouldHide: Bool, isFullScreen: Bool) {
-        guard isFullScreen else { return }
-        write(visible: !shouldHide)
+    init(playerMode: Bool) {
+        self.playerMode = playerMode
+        _ = restorePlayer()
     }
 
-    /// Used at startup and on graceful shutdown so the menu bar is
-    /// never left hidden.
+    func apply(shouldHide: Bool, isFullScreen: Bool, target: MenuBarTarget) {
+        switch target {
+        case .system:
+            if playerMode, !restorePlayer() {
+                return
+            }
+            playerMode = false
+            if isFullScreen {
+                write(!shouldHide as CFBoolean, domain: kCFPreferencesAnyApplication)
+            }
+        case let .player(bundle):
+            if !playerMode {
+                resetToVisible()
+            }
+            playerMode = true
+            let nextPlayer = shouldHide && isFullScreen ? bundle : nil
+            guard nextPlayer != activePlayer, restorePlayer(), let nextPlayer else { return }
+            hideForPlayer(nextPlayer)
+        }
+    }
+
     func resetToVisible() {
-        write(visible: true)
+        if playerMode {
+            _ = restorePlayer()
+        } else {
+            write(true as CFBoolean, domain: kCFPreferencesAnyApplication)
+        }
     }
 
-    /// No in-process dedup here: a cached "last written" value goes
-    /// stale the moment the user toggles "Automatically hide and
-    /// show the menu bar in full screen" in System Settings — we'd
-    /// then skip a write that's actually needed. Snapshot-level
-    /// dedup in `SmartController.evaluate` collapses redundant calls
-    /// before they reach this layer; SkyLight re-animates on each
-    /// `DistributedNotification` post, so suppressing duplicate
-    /// posts upstream is what prevents flicker.
-    private func write(visible: Bool) {
-        CFPreferencesSetValue(
-            Self.key, visible as CFBoolean,
-            Self.domain, Self.user, Self.host,
-        )
-        CFPreferencesSynchronize(Self.domain, Self.user, Self.host)
-        DistributedNotificationCenter.default().postNotificationName(
-            Self.changeNotification,
-            object: nil,
-            userInfo: nil,
-            deliverImmediately: true,
-        )
+    private func hideForPlayer(_ bundle: String) {
+        guard let recoveryURL else { return }
+        let domain = bundle as CFString
+        var record: [String: Any] = ["bundle": bundle]
+        record["previous"] = CFPreferencesCopyValue(Self.key, domain, Self.user, Self.host)
+        do {
+            // Save the exact previous value (including absence) before overriding it.
+            // A new daemon can then restore it even after a crash.
+            try FileManager.default.createDirectory(at: recoveryURL.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            let data = try PropertyListSerialization.data(
+                fromPropertyList: record,
+                format: .binary,
+                options: 0,
+            )
+            try data.write(to: recoveryURL, options: .atomic)
+            if write(false as CFBoolean, domain: domain) {
+                activePlayer = bundle
+            }
+        } catch {
+            warn("could not save the player's menu preference: \(error)")
+        }
+    }
+
+    @discardableResult
+    private func restorePlayer() -> Bool {
+        guard let recoveryURL, FileManager.default.fileExists(atPath: recoveryURL.path) else {
+            activePlayer = nil
+            return true
+        }
+        do {
+            let data = try Data(contentsOf: recoveryURL)
+            guard let record = try PropertyListSerialization.propertyList(
+                      from: data,
+                      format: nil,
+                  ) as? [String: Any],
+                  let bundle = record["bundle"] as? String, !bundle.isEmpty
+            else {
+                warn("invalid saved player menu preference")
+                return false
+            }
+            let domain = bundle as CFString
+            // Preserve a change made by the user or the player during playback.
+            if let current = CFPreferencesCopyValue(Self.key, domain, Self.user, Self.host),
+               CFEqual(current, kCFBooleanFalse),
+               !write(record["previous"] as CFPropertyList?, domain: domain)
+            {
+                return false
+            }
+            try FileManager.default.removeItem(at: recoveryURL)
+            activePlayer = nil
+            return true
+        } catch {
+            warn("could not restore the player's menu preference: \(error)")
+            return false
+        }
+    }
+
+    @discardableResult
+    private func write(_ value: CFPropertyList?, domain: CFString) -> Bool {
+        CFPreferencesSetValue(Self.key, value, domain, Self.user, Self.host)
+        guard CFPreferencesSynchronize(domain, Self.user, Self.host) else {
+            warn("could not synchronize the fullscreen menu preference")
+            return false
+        }
+        for name in [
+            "AppleInterfaceMenuBarHidingChangedNotification",
+            "AppleInterfaceFullScreenMenuBarVisibilityChangedNotification",
+        ] {
+            DistributedNotificationCenter.default().postNotificationName(
+                .init(name), object: nil, userInfo: nil, deliverImmediately: true,
+            )
+        }
+        return true
     }
 }
