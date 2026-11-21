@@ -161,17 +161,19 @@ final class SmartController: NSObject {
             object: nil,
         )
         NotificationCenter.default.addObserver(
-            self, selector: #selector(onDisplaysChange), name: NSApplication.didChangeScreenParametersNotification,
+            self, selector: #selector(onDisplaysChange),
+            name: NSApplication.didChangeScreenParametersNotification,
             object: nil,
         )
         try dockSpaceWatcher.start()
         // Poll only while the controller is running. This also covers windows
         // on secondary displays and fullscreen changes within the same app.
-        accessibilityTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.evaluate(trigger: .accessibility)
+        accessibilityTimer = Timer
+            .scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.evaluate(trigger: .accessibility)
+                }
             }
-        }
         HotkeyState.write(hotkeyWatcher.start() ? "registered" : "failed")
         evaluate(trigger: .start)
     }
@@ -325,25 +327,40 @@ final class SmartController: NSObject {
         let pid = frontmostProvider.frontmostApp?.pid
         let displayOptionsEnabled = displaySettings != DisplaySettings()
         if accessibilityTimer != nil,
-           let window = accessibilityFullScreen.state(for: pid, locateDisplay: displayOptionsEnabled) {
+           let window = accessibilityFullScreen.state(
+               for: pid,
+               locateDisplay: displayOptionsEnabled,
+           )
+        {
             externalDisplay = window.externalDisplay
             dockFs = window.fullscreen
         }
 
         var fullscreen = dockFs
-        if accessibilityTimer != nil, displayOptionsEnabled, externalDisplay == nil, isPlaying, let pid,
-           let display = PlaybackDisplays.externalFullscreenWindow(of: pid) {
+        if accessibilityTimer != nil, displayOptionsEnabled, externalDisplay == nil, isPlaying,
+           let pid,
+           let display = PlaybackDisplays.externalFullscreenWindow(of: pid)
+        {
             externalDisplay = display
             fullscreen = DockFullScreenState(isFullScreen: true, fsOwnerPID: FSOwnerPID(pid))
         }
-        if accessibilityTimer != nil, lastSnapshot?.dockFs.isFullScreen == true, !fullscreen.isFullScreen {
+        if accessibilityTimer != nil, lastSnapshot?.dockFs.isFullScreen == true,
+           !fullscreen.isFullScreen
+        {
             onDesktopArrival()
         }
-        if let display = externalDisplay, !displaySettings.scope.matches(display) { externalDisplay = nil }
-        if displaySettings.scope != .all, externalDisplay == nil { overrule = .auto }
+        if let display = externalDisplay,
+           !displaySettings.scope.matches(display)
+        {
+            externalDisplay = nil
+        }
+        if displaySettings.scope != .all, externalDisplay == nil {
+            overrule = .auto
+        }
         let snap = takeSnapshot(fullscreen: fullscreen)
         playbackDisplays.update(shade: displaySettings.shade,
-                                playbackDisplay: externalDisplay != nil && snap.decision.shouldHide ? externalDisplay : nil)
+                                playbackDisplay: externalDisplay != nil && snap.decision
+                                    .shouldHide ? externalDisplay : nil)
 
         if !force, let last = lastSnapshot, snap == last {
             Log.controller.debug(

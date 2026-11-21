@@ -13,7 +13,6 @@ protocol MenuBarToggling: AnyObject {
 
 @MainActor
 final class MenuBarToggler: MenuBarToggling {
-
     private static let key = "AppleMenuBarVisibleInFullscreen" as CFString
     private static let user = kCFPreferencesCurrentUser
     private static let host = kCFPreferencesAnyHost
@@ -29,11 +28,17 @@ final class MenuBarToggler: MenuBarToggling {
     func apply(shouldHide: Bool, isFullScreen: Bool, target: MenuBarTarget) {
         switch target {
         case .system:
-            if playerMode, !restorePlayer() { return }
+            if playerMode, !restorePlayer() {
+                return
+            }
             playerMode = false
-            if isFullScreen { write(!shouldHide as CFBoolean, domain: kCFPreferencesAnyApplication) }
+            if isFullScreen {
+                write(!shouldHide as CFBoolean, domain: kCFPreferencesAnyApplication)
+            }
         case let .player(bundle):
-            if !playerMode { resetToVisible() }
+            if !playerMode {
+                resetToVisible()
+            }
             playerMode = true
             let nextPlayer = shouldHide && isFullScreen ? bundle : nil
             guard nextPlayer != activePlayer, restorePlayer(), let nextPlayer else { return }
@@ -42,8 +47,11 @@ final class MenuBarToggler: MenuBarToggling {
     }
 
     func resetToVisible() {
-        if playerMode { _ = restorePlayer() }
-        else { write(true as CFBoolean, domain: kCFPreferencesAnyApplication) }
+        if playerMode {
+            _ = restorePlayer()
+        } else {
+            write(true as CFBoolean, domain: kCFPreferencesAnyApplication)
+        }
     }
 
     private func hideForPlayer(_ bundle: String) {
@@ -56,9 +64,15 @@ final class MenuBarToggler: MenuBarToggling {
             // A new daemon can then restore it even after a crash.
             try FileManager.default.createDirectory(at: recoveryURL.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
-            let data = try PropertyListSerialization.data(fromPropertyList: record, format: .binary, options: 0)
+            let data = try PropertyListSerialization.data(
+                fromPropertyList: record,
+                format: .binary,
+                options: 0,
+            )
             try data.write(to: recoveryURL, options: .atomic)
-            if write(false as CFBoolean, domain: domain) { activePlayer = bundle }
+            if write(false as CFBoolean, domain: domain) {
+                activePlayer = bundle
+            }
         } catch {
             warn("could not save the player's menu preference: \(error)")
         }
@@ -72,8 +86,12 @@ final class MenuBarToggler: MenuBarToggling {
         }
         do {
             let data = try Data(contentsOf: recoveryURL)
-            guard let record = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-                  let bundle = record["bundle"] as? String, !bundle.isEmpty else {
+            guard let record = try PropertyListSerialization.propertyList(
+                      from: data,
+                      format: nil,
+                  ) as? [String: Any],
+                  let bundle = record["bundle"] as? String, !bundle.isEmpty
+            else {
                 warn("invalid saved player menu preference")
                 return false
             }
@@ -81,7 +99,10 @@ final class MenuBarToggler: MenuBarToggling {
             // Preserve a change made by the user or the player during playback.
             if let current = CFPreferencesCopyValue(Self.key, domain, Self.user, Self.host),
                CFEqual(current, kCFBooleanFalse),
-               !write(record["previous"] as CFPropertyList?, domain: domain) { return false }
+               !write(record["previous"] as CFPropertyList?, domain: domain)
+            {
+                return false
+            }
             try FileManager.default.removeItem(at: recoveryURL)
             activePlayer = nil
             return true
@@ -98,9 +119,12 @@ final class MenuBarToggler: MenuBarToggling {
             warn("could not synchronize the fullscreen menu preference")
             return false
         }
-        for name in ["AppleInterfaceMenuBarHidingChangedNotification", "AppleInterfaceFullScreenMenuBarVisibilityChangedNotification"] {
+        for name in [
+            "AppleInterfaceMenuBarHidingChangedNotification",
+            "AppleInterfaceFullScreenMenuBarVisibilityChangedNotification",
+        ] {
             DistributedNotificationCenter.default().postNotificationName(
-                .init(name), object: nil, userInfo: nil, deliverImmediately: true
+                .init(name), object: nil, userInfo: nil, deliverImmediately: true,
             )
         }
         return true

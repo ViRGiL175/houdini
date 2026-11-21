@@ -4,10 +4,10 @@ import AppKit
 /// optionally so an OS change cannot prevent the rest of Houdini from starting.
 @MainActor
 final class BuiltInBacklight {
-
     static let shared = BuiltInBacklight()
 
-    private typealias Read = @convention(c) (CGDirectDisplayID, UnsafeMutablePointer<Float>) -> Int32
+    private typealias Read = @convention(c) (CGDirectDisplayID, UnsafeMutablePointer<Float>)
+        -> Int32
     private typealias Write = @convention(c) (CGDirectDisplayID, Float) -> Int32
     private let read: Read?
     private let write: Write?
@@ -23,7 +23,9 @@ final class BuiltInBacklight {
             // level tells us that it is safe to discard the recovery record.
             let tolerance: Float = 0.001
             guard let current = read() else { return false }
-            if abs(current - previous) <= tolerance { return true }
+            if abs(current - previous) <= tolerance {
+                return true
+            }
             guard write(previous), let restored = read() else { return false }
             return abs(restored - previous) <= tolerance
         }
@@ -34,8 +36,14 @@ final class BuiltInBacklight {
     private init() {
         let path = "/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices"
         let library = dlopen(path, RTLD_LAZY)
-        read = library.flatMap { dlsym($0, "DisplayServicesGetBrightness") }.map { unsafeBitCast($0, to: Read.self) }
-        write = library.flatMap { dlsym($0, "DisplayServicesSetBrightness") }.map { unsafeBitCast($0, to: Write.self) }
+        read = library.flatMap { dlsym($0, "DisplayServicesGetBrightness") }.map { unsafeBitCast(
+            $0,
+            to: Read.self,
+        ) }
+        write = library.flatMap { dlsym($0, "DisplayServicesSetBrightness") }.map { unsafeBitCast(
+            $0,
+            to: Write.self,
+        ) }
     }
 
     /// Only the daemon holding the instance lock owns this recovery record.
@@ -61,7 +69,10 @@ final class BuiltInBacklight {
         else { return }
         let record = Change(screen: id, previous: previous, dimmed: previous * 0.25)
         do {
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true,
+            )
             try JSONEncoder().encode(record).write(to: url, options: .atomic)
             change = record
             if write(display, record.dimmed) != 0 {
@@ -77,7 +88,10 @@ final class BuiltInBacklight {
         for screen in NSScreen.screens {
             guard let display = screen.displayID, CGDisplayIsBuiltin(display) != 0,
                   DisplayScope.uuid(of: display) == change.screen else { continue }
-            guard change.restore(read: { self.level(on: display) }, write: { write(display, $0) == 0 }) else { return }
+            guard change.restore(
+                read: { self.level(on: display) },
+                write: { write(display, $0) == 0 },
+            ) else { return }
             do {
                 try FileManager.default.removeItem(at: url)
                 self.change = nil

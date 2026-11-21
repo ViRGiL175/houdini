@@ -22,7 +22,8 @@ enum DisplayScope: RawRepresentable, Equatable {
     }
 
     static func uuid(of display: CGDirectDisplayID) -> UUID? {
-        guard let uuid = CGDisplayCreateUUIDFromDisplayID(display)?.takeRetainedValue() else { return nil }
+        guard let uuid = CGDisplayCreateUUIDFromDisplayID(display)?.takeRetainedValue()
+        else { return nil }
         return UUID(uuidString: CFUUIDCreateString(nil, uuid) as String)
     }
 
@@ -37,7 +38,6 @@ enum OtherScreenShade: String {
 }
 
 struct DisplaySettings: Equatable {
-
     var scope: DisplayScope = .all
     var shade: OtherScreenShade = .off
 
@@ -63,11 +63,10 @@ extension NSScreen {
 
 @MainActor
 final class PlaybackDisplays {
-
     private var panels: [CGDirectDisplayID: NSPanel] = [:]
 
-    // AX and Core Graphics use global coordinates from the top left.
-    // NSScreen.frame, used to position the panels below, uses AppKit coordinates.
+    /// AX and Core Graphics use global coordinates from the top left.
+    /// NSScreen.frame, used to position the panels below, uses AppKit coordinates.
     static func externalDisplay(containing point: CGPoint) -> CGDirectDisplayID? {
         for screen in NSScreen.screens {
             guard let id = screen.displayID,
@@ -86,8 +85,8 @@ final class PlaybackDisplays {
     /// window ID and owner; stale, incomplete or unfamiliar records are ignored.
     static func externalFullscreenWindow(of pid: pid_t) -> CGDirectDisplayID? {
         guard let configuration = CFPreferencesCopyAppValue(
-            "SpacesDisplayConfiguration" as CFString, "com.apple.spaces" as CFString
-        ) as? [String: Any],
+                  "SpacesDisplayConfiguration" as CFString, "com.apple.spaces" as CFString,
+              ) as? [String: Any],
               let management = configuration["Management Data"] as? [String: Any],
               let monitors = management["Monitors"] as? [[String: Any]]
         else { return nil }
@@ -96,18 +95,23 @@ final class PlaybackDisplays {
         for monitor in monitors {
             guard let spaces = monitor["Spaces"] as? [[String: Any]] else { continue }
             for space in spaces where space["type"] as? Int == 4 && space["pid"] as? pid_t == pid {
-                if let id = space["fs_wid"] as? CGWindowID { fullscreenIDs.insert(id) }
+                if let id = space["fs_wid"] as? CGWindowID {
+                    fullscreenIDs.insert(id)
+                }
             }
         }
         guard !fullscreenIDs.isEmpty,
-              let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
-                                                       kCGNullWindowID) as? [[String: Any]]
+              let windows = CGWindowListCopyWindowInfo(
+                  [.optionOnScreenOnly, .excludeDesktopElements],
+                  kCGNullWindowID,
+              ) as? [[String: Any]]
         else { return nil }
 
         let screens = NSScreen.screens.compactMap(\.displayID).map { CGDisplayBounds($0) }
         var precedingWindows: [CGRect] = []
         for window in windows where window[kCGWindowOwnerPID as String] as? pid_t == pid
-            && window[kCGWindowLayer as String] as? Int == 0 {
+            && window[kCGWindowLayer as String] as? Int == 0
+        {
             guard let id = window[kCGWindowNumber as String] as? CGWindowID,
                   let bounds = window[kCGWindowBounds as String] as? NSDictionary,
                   let rect = CGRect(dictionaryRepresentation: bounds),
@@ -121,7 +125,8 @@ final class PlaybackDisplays {
                 // A foreground document on another screen makes the target ambiguous.
                 let displayBounds = CGDisplayBounds(display)
                 guard !precedingWindows.contains(where: { frame in
-                    frame.contains(center) || screens.contains { $0 != displayBounds && !$0.intersection(frame).isEmpty }
+                    frame.contains(center) || screens
+                        .contains { $0 != displayBounds && !$0.intersection(frame).isEmpty }
                 }) else { return nil }
                 return display
             }
@@ -140,7 +145,9 @@ final class PlaybackDisplays {
 
     func clear() {
         BuiltInBacklight.shared.restore()
-        for panel in panels.values { panel.orderOut(nil) }
+        for panel in panels.values {
+            panel.orderOut(nil)
+        }
         panels.removeAll()
     }
 
@@ -155,7 +162,9 @@ final class PlaybackDisplays {
             clear()
             return
         }
-        if shade != .dim { BuiltInBacklight.shared.restore() }
+        if shade != .dim {
+            BuiltInBacklight.shared.restore()
+        }
         var active = Set<CGDirectDisplayID>()
         for screen in screens {
             guard let id = screen.displayID, id != playbackDisplay else { continue }
@@ -168,19 +177,32 @@ final class PlaybackDisplays {
             if let existing = panels[id] {
                 panel = existing
             } else {
-                panel = NSPanel(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel],
-                                backing: .buffered, defer: false)
+                panel = NSPanel(
+                    contentRect: screen.frame,
+                    styleMask: [.borderless, .nonactivatingPanel],
+                    backing: .buffered,
+                    defer: false,
+                )
                 panel.backgroundColor = .black
                 panel.hasShadow = false
                 panel.hidesOnDeactivate = false
                 panel.ignoresMouseEvents = true
                 panel.level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 1)
-                panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+                panel.collectionBehavior = [
+                    .canJoinAllSpaces,
+                    .fullScreenAuxiliary,
+                    .stationary,
+                    .ignoresCycle,
+                ]
                 panels[id] = panel
             }
-            if panel.frame != screen.frame { panel.setFrame(screen.frame, display: true) }
+            if panel.frame != screen.frame {
+                panel.setFrame(screen.frame, display: true)
+            }
             panel.alphaValue = shade == .dim ? 0.75 : 1
-            if !panel.isVisible { panel.orderFrontRegardless() }
+            if !panel.isVisible {
+                panel.orderFrontRegardless()
+            }
         }
         for id in panels.keys.filter({ !active.contains($0) }) {
             panels.removeValue(forKey: id)?.orderOut(nil)

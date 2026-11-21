@@ -304,7 +304,12 @@ func runMode(args: [String]) -> Never {
 }
 
 @MainActor
-func runDisplaySetting<Value: RawRepresentable>(_ key: String, args: [String], default fallback: Value, choices: String) -> Never
+func runDisplaySetting<Value: RawRepresentable>(
+    _ key: String,
+    args: [String],
+    default fallback: Value,
+    choices: String,
+) -> Never
     where Value.RawValue == String
 {
     if args.isEmpty {
@@ -316,7 +321,10 @@ func runDisplaySetting<Value: RawRepresentable>(_ key: String, args: [String], d
     }
     guard let url = subsystemSupportURL(key) else { die("cannot locate Application Support") }
     do {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true,
+        )
         try value.rawValue.write(to: url, atomically: true, encoding: .utf8)
     } catch {
         die("could not write \(key): \(error)")
@@ -464,7 +472,9 @@ func runLogs(args: [String]) -> Never {
     // runtime isolation check traps with SIGTRAP otherwise when
     // the handler fires on `.global()`.
     let onSignal: @Sendable () -> Void = {
-        if proc.isRunning { proc.terminate() }
+        if proc.isRunning {
+            proc.terminate()
+        }
     }
     let signalSources: [DispatchSourceSignal] = [SIGINT, SIGTERM].map { sig in
         signal(sig, SIG_IGN)

@@ -25,9 +25,19 @@ MainActor.assumeIsolated {
             PlaybackDisplays.listExternalDisplays()
             exit(0)
         }
-        runDisplaySetting(cmd, args: Array(args.dropFirst()), default: DisplayScope.all, choices: "all|external|UUID")
+        runDisplaySetting(
+            cmd,
+            args: Array(args.dropFirst()),
+            default: DisplayScope.all,
+            choices: "all|external|UUID",
+        )
     case "shade":
-        runDisplaySetting(cmd, args: Array(args.dropFirst()), default: OtherScreenShade.off, choices: "off|dim|black")
+        runDisplaySetting(
+            cmd,
+            args: Array(args.dropFirst()),
+            default: OtherScreenShade.off,
+            choices: "off|dim|black",
+        )
     case "deny":
         runDeny(args: Array(args.dropFirst()))
     case "status":

@@ -4,9 +4,7 @@ import ApplicationServices
 /// Read the focused window's actual state when the owner has granted access.
 @MainActor
 struct AccessibilityFullScreenProvider {
-
     struct FocusedWindow {
-
         let fullscreen: DockFullScreenState
         var externalDisplay: CGDirectDisplayID?
     }
@@ -18,16 +16,16 @@ struct AccessibilityFullScreenProvider {
         AXUIElementSetMessagingTimeout(app, 0.2)
         var windowValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute as CFString,
-                                          &windowValue) == .success,
-              let windowValue,
-              CFGetTypeID(windowValue) == AXUIElementGetTypeID()
+                                            &windowValue) == .success,
+            let windowValue,
+            CFGetTypeID(windowValue) == AXUIElementGetTypeID()
         else { return FocusedWindow(fullscreen: .initial) }
         let window = unsafeDowncast(windowValue, to: AXUIElement.self)
         var fullScreenValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(window, "AXFullScreen" as CFString,
-                                          &fullScreenValue) == .success,
-              let fullScreenValue,
-              CFGetTypeID(fullScreenValue) == CFBooleanGetTypeID()
+                                            &fullScreenValue) == .success,
+            let fullScreenValue,
+            CFGetTypeID(fullScreenValue) == CFBooleanGetTypeID()
         else { return FocusedWindow(fullscreen: .initial) }
         let fullscreen = CFBooleanGetValue(unsafeDowncast(fullScreenValue, to: CFBoolean.self))
         let state = DockFullScreenState(
@@ -37,7 +35,10 @@ struct AccessibilityFullScreenProvider {
         guard fullscreen, locateDisplay, let center = center(of: window) else {
             return FocusedWindow(fullscreen: state)
         }
-        return FocusedWindow(fullscreen: state, externalDisplay: PlaybackDisplays.externalDisplay(containing: center))
+        return FocusedWindow(
+            fullscreen: state,
+            externalDisplay: PlaybackDisplays.externalDisplay(containing: center),
+        )
     }
 
     private func center(of window: AXUIElement) -> CGPoint? {
